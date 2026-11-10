@@ -15,7 +15,7 @@
   --sky:#a3acb3; --street:#3a4047; --ink:#12161a; --paper:#eef3f7;
   --steel-hi:#e6e9ec; --steel:#bfc5cb; --steel-lo:#8a9199; --steel-dk:#4d545b;
   --glow:#4f9dff; --lit:#f6faff; --amber:#f08a1c; --go:#2f7fe6;
-  --n-green:#bfe6b0; --n-pink:#f6b7cf; --n-blue:#a9d3f2; --n-yellow:#f4e79a; --n-violet:#d6c2ee;
+  --n-green:#bfe6b0; --n-pink:#f6b7cf; --n-blue:#a9d3f2; --n-yellow:#f4e79a; --n-violet:#d6c2ee; --n-coral:#f7b29a; --n-teal:#a5e0d6; --n-white:#fbfaf4;
   --f-label:"Saira Condensed","Arial Narrow",sans-serif;
   --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-hand:"Patrick Hand","Comic Sans MS",cursive;
@@ -70,7 +70,11 @@ header p{margin:6px 0 0;font-size:1rem;max-width:34ch;font-weight:500}
 .tag{height:1.5cqw;font:500 1.25cqw/1.5cqw var(--f-label);text-align:center;color:#3c444c;background:#e8edf1;border-radius:.2cqw;letter-spacing:.05em}
 .note{position:absolute;inset:11% 9%;padding:.5cqw .6cqw;border-radius:.2cqw;font:400 1.95cqw/1.02 var(--f-hand);color:#2a2f35;overflow:hidden;
   box-shadow:0 .3cqw .5cqw rgba(0,0,0,.2);transform:rotate(var(--tilt,0deg));overflow-wrap:anywhere}
-.note.green{background:var(--n-green)}.note.pink{background:var(--n-pink)}.note.blue{background:var(--n-blue)}.note.yellow{background:var(--n-yellow)}.note.violet{background:var(--n-violet)}
+.note.green{background:var(--n-green)}.note.pink{background:var(--n-pink)}.note.blue{background:var(--n-blue)}.note.yellow{background:var(--n-yellow)}.note.violet{background:var(--n-violet)}.note.coral{background:var(--n-coral)}.note.teal{background:var(--n-teal)}.note.white{background:var(--n-white)}
+.note.drawn{padding:0}
+.note img{display:block;width:100%;height:100%;object-fit:contain}
+.note .who{display:block;margin-top:.4cqw;filter:blur(.42cqw);opacity:.85;user-select:none;letter-spacing:-.05em}
+.cell.dim{opacity:.2}
 .cell.full:hover .cube,.cell.full:focus-visible .cube{border-color:var(--glow)}
 .cell:focus-visible{outline:.5cqw solid var(--glow);outline-offset:.2cqw}
 .cell.sel .cube{border-color:var(--glow);box-shadow:0 0 0 .35cqw var(--glow),0 0 2cqw var(--glow),inset 0 0 1.4cqw #fff;animation:pick 1s ease-in-out infinite}
@@ -135,6 +139,21 @@ header p{margin:6px 0 0;font-size:1rem;max-width:34ch;font-weight:500}
 .btn.go{background:var(--go);color:#fff}
 .btn.go:hover{background:#4a92ef}
 [hidden]{display:none!important}
+dialog{max-height:calc(100% - 32px);overflow:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:0;border-radius:99px;padding:6px 11px 6px 8px;background:#2a3038;color:#eef2f5;font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:6px}
+.chip i,.kinds i{width:15px;height:15px;border-radius:3px;background:var(--c);flex:none;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.chip[aria-pressed=true]{background:#eef2f5;color:#12161a}
+.kinds{display:grid;grid-template-columns:1fr 1fr;gap:6px;border:0;padding:0;margin:0}
+.kinds legend{font-weight:600;font-size:.9rem;padding:0;margin-bottom:6px}
+.dlg .kinds label{flex-direction:row;align-items:center;gap:8px;font-weight:500;font-size:.85rem;background:#fff;border:2px solid #c3ccd4;border-radius:8px;padding:7px 8px;cursor:pointer;line-height:1.2}
+.kinds input{position:absolute;opacity:0}
+.kinds label:has(input:checked){border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.kinds label:has(input:focus-visible){outline:3px solid var(--go);outline-offset:1px}
+.kinds b{display:block;font:700 .7rem var(--f-label);letter-spacing:.08em;text-transform:uppercase;color:#56616b}
+.pad{width:100%;max-width:260px;aspect-ratio:1;border-radius:3px;box-shadow:0 4px 10px rgba(0,0,0,.22);align-self:center;margin:0 auto}
+.pad canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+#drawWrap{display:flex;flex-direction:column;gap:8px}
 .console a,.console .link{color:#9cc7ff;background:none;border:0;padding:0;text-decoration:underline;font-size:.82rem}
 .tabs{display:flex;gap:8px}
 .tabs .btn[aria-pressed=true]{background:var(--ink);color:#fff}
@@ -161,7 +180,8 @@ dialog::backdrop{background:rgba(18,22,26,.6)}
 .dlg .btn.go{background:var(--go);color:#fff}
 .dlg .err{color:#a3261b;font-weight:600;font-size:.9rem;min-height:1.2em}
 .bignote{padding:18px 18px 22px;border-radius:3px;font-family:var(--f-hand);font-size:1.35rem;line-height:1.25;box-shadow:0 6px 14px rgba(0,0,0,.22);transform:rotate(-1.2deg);overflow-wrap:anywhere;animation:unfold .5s cubic-bezier(.2,1.2,.4,1)}
-.bignote.green{background:var(--n-green)}.bignote.pink{background:var(--n-pink)}.bignote.blue{background:var(--n-blue)}.bignote.yellow{background:var(--n-yellow)}.bignote.violet{background:var(--n-violet)}
+.bignote.green{background:var(--n-green)}.bignote.pink{background:var(--n-pink)}.bignote.blue{background:var(--n-blue)}.bignote.yellow{background:var(--n-yellow)}.bignote.violet{background:var(--n-violet)}.bignote.coral{background:var(--n-coral)}.bignote.teal{background:var(--n-teal)}.bignote.white{background:var(--n-white)}
+.bignote img{display:block;width:100%;aspect-ratio:1;object-fit:contain}
 .bignote b{display:block;font-size:1.7rem;font-weight:400}
 .bignote .c{display:block;margin-top:8px;font-size:1.5rem;letter-spacing:.02em}
 @keyframes unfold{from{transform:scaleY(.1) rotate(-6deg);opacity:0}}
@@ -220,6 +240,7 @@ ol.how{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;li
 
   <section class="console" aria-label="Machine controls">
     <p class="line" id="status" aria-live="polite">Starting up the machine.</p>
+    <div class="legend" id="legend" hidden role="group" aria-label="Note types. Tap one to light up only those notes."></div>
     <div class="row" id="rowPlay" hidden>
       <button class="btn go" id="bPay" hidden>Insert $1</button>
       <button class="btn go" id="bTake" hidden>Take your note</button>
@@ -240,16 +261,18 @@ ol.how{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;li
 
 <dialog id="dLeave" aria-labelledby="hLeave"><form class="dlg" id="fLeave" novalidate>
   <h2 id="hLeave">Write your note</h2>
-  <label for="iName">Your first name<input type="text" id="iName" maxlength="20" autocomplete="given-name"></label>
-  <label for="iAct">One thing you'd be down to do<input type="text" id="iAct" maxlength="48" placeholder="Coffee at Rebel"><span class="hint">This is what people see through the glass.</span></label>
-  <label for="iContact">Phone or @handle<input type="text" id="iContact" maxlength="32" autocomplete="off"><span class="hint">Hidden inside the note. Only the member who pulls it sees it.</span></label>
-  <fieldset class="swatches"><legend>Paper</legend>
-    <label><input type="radio" name="color" id="cGreen" value="green" checked><span style="background:var(--n-green)" title="Green"></span></label>
-    <label><input type="radio" name="color" id="cPink" value="pink"><span style="background:var(--n-pink)" title="Pink"></span></label>
-    <label><input type="radio" name="color" id="cBlue" value="blue"><span style="background:var(--n-blue)" title="Blue"></span></label>
-    <label><input type="radio" name="color" id="cYellow" value="yellow"><span style="background:var(--n-yellow)" title="Yellow"></span></label>
-    <label><input type="radio" name="color" id="cViolet" value="violet"><span style="background:var(--n-violet)" title="Violet"></span></label>
-  </fieldset>
+  <fieldset class="kinds" id="kinds"><legend>What kind of note is it?</legend></fieldset>
+  <div class="tabs"><button class="btn" type="button" id="mType" aria-pressed="true">Type it</button><button class="btn" type="button" id="mDraw" aria-pressed="false">Draw it</button></div>
+  <label for="iAct" id="actWrap"><span id="actLabel">One thing you'd be down to do</span><input type="text" id="iAct" maxlength="80" placeholder="Coffee at Rebel"><span class="hint">This shows through the glass.</span></label>
+  <div id="drawWrap" hidden>
+    <div class="pad" id="pad"><canvas id="cv" width="320" height="320" aria-label="Drawing pad"></canvas></div>
+    <div class="row" style="justify-content:center"><button class="btn" type="button" id="bClear">Clear</button></div>
+    <span class="hint">Write or draw with your finger or mouse. Your handwriting shows through the glass.</span>
+  </div>
+  <div id="whoWrap" style="display:flex;flex-direction:column;gap:14px">
+    <label for="iName">Your first name<input type="text" id="iName" maxlength="20" autocomplete="given-name"><span class="hint">Blurred on the glass. Revealed only to the member who pulls your note.</span></label>
+    <label for="iContact">Phone or @handle<input type="text" id="iContact" maxlength="32" autocomplete="off"><span class="hint">Hidden inside the note. Only the member who pulls it sees it.</span></label>
+  </div>
   <div class="err" id="leaveErr" role="alert"></div>
   <div class="row"><button class="btn go" type="submit">Insert note</button><button class="btn" type="button" data-close>Cancel</button></div>
 </form></dialog>
@@ -268,8 +291,8 @@ ol.how{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;li
 <dialog id="dPrize" aria-labelledby="hPrize"><div class="dlg">
   <h2 id="hPrize">You got a note</h2>
   <div class="bignote" id="prizeNote"></div>
-  <p class="hint">Send this to break the ice:</p>
-  <div class="opener" id="opener"></div>
+  <div id="openerWrap" style="display:flex;flex-direction:column;gap:10px"><p class="hint">Send this to break the ice:</p>
+  <div class="opener" id="opener"></div></div>
   <div class="row"><button class="btn go" id="bCopy" type="button">Copy message</button><button class="btn" type="button" data-close>Done</button></div>
 </div></dialog>
 
@@ -283,10 +306,10 @@ ol.how{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;li
 <dialog id="dHow" aria-labelledby="hHow"><div class="dlg">
   <h2 id="hHow">How it works</h2>
   <ol class="how">
-    <li>Write a note: your name, a way to reach you, and one thing you'd do with someone. Feed it into the slot.</li>
-    <li>It lands in a lit box. People see only the activity through the glass.</li>
-    <li>Tap a note you like, insert $1, and it drops into the tray with the name and contact inside.</li>
-    <li>Text them: "Hey, I got your note from the vending machine."</li>
+    <li>Pick a note type: romantic, a hangout, or a fun note. The paper color shows the type.</li>
+    <li>Type your note or draw it by hand, then feed it into the slot. It lands in a lit box.</li>
+    <li>Everyone sees the notes through the glass. Names are blurred and contacts stay hidden.</li>
+    <li>Tap a note you like, insert $1, and it drops into the tray with the name and contact inside. Fun notes are anonymous: you just get the message.</li>
   </ol>
   <p class="hint">Members are approved by hand before they can use the machine. Each note can be pulled once, and you can hold up to three notes in the machine. The dollar is pretend for now: no payment is taken.</p>
   <div class="row"><button class="btn" type="button" data-close>Got it</button></div>

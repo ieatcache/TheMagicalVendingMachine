@@ -2,8 +2,20 @@
 (() => {
 const $ = id => document.getElementById(id);
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const COLORS = ['green','pink','blue','yellow','violet'];
-const CSSVAR = {green:'--n-green',pink:'--n-pink',blue:'--n-blue',yellow:'--n-yellow',violet:'--n-violet'};
+const KINDS = {
+  rom_mw:   {group: 'Romantic', label: 'Man and woman', color: 'pink'},
+  rom_mm:   {group: 'Romantic', label: 'Man for a man', color: 'blue'},
+  rom_ww:   {group: 'Romantic', label: 'Woman for a woman', color: 'violet'},
+  rom_open: {group: 'Romantic', label: 'Non-binary or open to anyone', color: 'coral'},
+  hang_guy: {group: 'Hangout', label: 'With a guy', color: 'green'},
+  hang_girl:{group: 'Hangout', label: 'With a girl', color: 'teal'},
+  hang_any: {group: 'Hangout', label: 'With anyone', color: 'yellow'},
+  fun:      {group: 'Fun note', label: 'Just a note to receive', color: 'white'}};
+const bg = kind => 'var(--n-' + KINDS[kind].color + ')';
+const kindName = kind => KINDS[kind].group + (kind === 'fun' ? '' : ', ' + KINDS[kind].label.toLowerCase());
+const PNG = 'data:image/png;base64,';
+const describe = n => n.activity || 'a handwritten note';
+const SMUDGE = ['mmmmm', 'mmmmmmm', 'mmmm', 'mmmmmm'];
 const MAX_MINE = 3;
 const str = (v,n) => String(v == null ? '' : v).slice(0,n);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -29,12 +41,15 @@ SLOTS.forEach(s => {
 /* ---- state ---- */
 let me = null, gate = 'out', firstPaint = true, channel = null, poll = null;
 let notes = new Map();            // id -> note
-let mode = 'idle', sel = null, prize = null;
+let mode = 'idle', sel = null, prize = null, filter = '', leaveMode = 'type', inked = false;
 
-const clean = (r, secret) => ({ id: r.id,
-  slot: str(r.slot, 3), activity: str(r.activity, 48), color: COLORS.includes(r.color) ? r.color : 'yellow',
-  by: r.author, pulledBy: r.pulled_by || (r.pulled_at ? 'gone' : ''), at: Date.parse(r.created_at) || 0,
-  name: secret ? str(secret.name, 20) : '', contact: secret ? str(secret.contact, 32) : '' });
+const clean = (r, secret) => {
+  const kind = KINDS[r.kind] ? r.kind : 'hang_any';
+  const drawing = typeof r.drawing === 'string' && r.drawing.startsWith(PNG) && r.drawing.length <= 130000 ? r.drawing : '';
+  return { id: r.id, slot: str(r.slot, 3), activity: str(r.activity, 80), kind, color: KINDS[kind].color, drawing,
+    by: r.author, pulledBy: r.pulled_by || (r.pulled_at ? 'gone' : ''), at: Date.parse(r.created_at) || 0,
+    name: secret ? str(secret.name, 20) : '', contact: secret ? str(secret.contact, 32) : '' };
+};
 const inMachine = () => { const m = {}; [...notes.values()].filter(n => !n.pulledBy && cells[n.slot]).sort((a, b) => a.at - b.at).forEach(n => { if (!m[n.slot]) m[n.slot] = n; }); return m; };
 const tilt = id => ((id.charCodeAt(0) * 7 + id.charCodeAt(id.length - 1) * 13) % 9) - 4;
 
@@ -42,13 +57,16 @@ function render() {
   const m = inMachine();
   SLOTS.forEach(s => {
     const c = cells[s.id], n = m[s.id];
-    const key = n ? n.id + '|' + n.activity + '|' + n.color : '';
+    const key = n ? n.id + '|' + n.activity + '|' + n.kind + '|' + n.drawing.length : '';
     if (c.note !== key) {
       c.cube.textContent = '';
       c.b.classList.toggle('full', !!n);
       c.b.classList.remove('pop');
       if (n) {
-        const p = el('span', 'note ' + n.color, n.activity); p.style.setProperty('--tilt', tilt(n.id) + 'deg'); c.cube.append(p);
+        const p = el('span', 'note ' + n.color + (n.drawing ? ' drawn' : '')); p.style.setProperty('--tilt', tilt(n.id) + 'deg');
+        if (n.drawing) { const im = el('img'); im.alt = ''; im.src = n.drawing; p.append(im); }
+        else { p.textContent = n.activity; if (n.kind !== 'fun') { const w = el('span', 'who', SMUDGE[n.id.charCodeAt(0) % SMUDGE.length]); w.setAttribute('aria-hidden', 'true'); p.append(w); } }
+        c.cube.append(p);
         if (!firstPaint) { void c.b.offsetWidth; c.b.classList.add('pop'); }
       }
       c.note = key;
@@ -56,7 +74,8 @@ function render() {
     c.b.dataset.note = n ? n.id : '';
     c.b.classList.toggle('mine', !!n && n.by === me);
     c.b.classList.toggle('sel', !!n && sel === n.id && mode === 'selected');
-    c.b.setAttribute('aria-label', n ? 'Box ' + s.id + ': ' + n.activity + (n.by === me ? ' (your note)' : '') : 'Box ' + s.id + ', empty');
+    c.b.classList.toggle('dim', !!n && !!filter && filter !== n.kind);
+    c.b.setAttribute('aria-label', n ? 'Box ' + s.id + ', ' + kindName(n.kind) + ': ' + describe(n) + (n.by === me ? ' (your note)' : '') : 'Box ' + s.id + ', empty');
     c.b.disabled = !n;
   });
   if (sel && mode === 'selected' && (!notes.get(sel) || notes.get(sel).pulledBy)) { sel = null; setMode('idle', 'Someone just pulled that note. Pick another.'); }
@@ -77,7 +96,7 @@ function setMode(m, text, screen) {
 /* ---- membership gate ---- */
 function setGate(g, name, isAdmin) {
   gate = g;
-  $('rowPlay').hidden = g !== 'in'; $('rowGate').hidden = g === 'in';
+  $('rowPlay').hidden = $('legend').hidden = g !== 'in'; $('rowGate').hidden = g === 'in';
   $('bApply').hidden = $('bSignIn').hidden = g !== 'out';
   $('bRecheck').hidden = g !== 'pending';
   $('acct').hidden = g === 'out' || g === 'unset';
@@ -113,7 +132,7 @@ function load() {
   if (loading) return loading;
   loading = (async () => {
     const [n, s] = await Promise.all([
-      sb.from('notes').select('id,slot,activity,color,author,pulled_by,pulled_at,created_at'),
+      sb.from('notes').select('id,slot,activity,kind,drawing,author,pulled_by,pulled_at,created_at').or('pulled_at.is.null,author.eq.' + me + ',pulled_by.eq.' + me),
       sb.from('note_secrets').select('note_id,name,contact')]);
     if (n.error) { say('Could not reach the machine. Retrying shortly.'); return; }
     const secrets = new Map((s.data || []).map(x => [x.note_id, x]));
@@ -128,11 +147,11 @@ function pick(slotId) {
   if (needMember() || mode === 'busy' || mode === 'ready') return;
   const n = inMachine()[slotId]; if (!n) return;
   if (n.by === me) { sel = null; setMode('idle', 'Box ' + slotId + ' is your own note. You can take it back from My notes.'); return; }
-  sel = n.id; setMode('selected', 'Box ' + slotId + ': "' + n.activity + '". Insert $1 to get it.', slotId + '  $1.00');
+  sel = n.id; setMode('selected', 'Box ' + slotId + ' (' + kindName(n.kind) + '): ' + (n.activity ? '"' + n.activity + '"' : 'a handwritten note') + '. Insert $1 to get it.', slotId + '  $1.00');
 }
 function getRandom() {
   if (needMember() || mode === 'busy' || mode === 'ready') return;
-  const pool = Object.values(inMachine()).filter(n => n.by !== me);
+  const pool = Object.values(inMachine()).filter(n => n.by !== me && (!filter || filter === n.kind));
   if (!pool.length) { setMode('idle', 'No notes to pull right now. Leave one and check back.'); return; }
   pick(pool[Math.floor(Math.random() * pool.length)].slot);
 }
@@ -158,7 +177,7 @@ async function pay() {
   n.pulledBy = me; n.name = str(got.name, 20); n.contact = str(got.contact, 32);
   say('Dropping box ' + n.slot + '.', 'Vending'); render();
   const to = $('tray').getBoundingClientRect();
-  const f = el('div', 'fly'); f.style.background = 'var(' + CSSVAR[n.color] + ')';
+  const f = el('div', 'fly'); f.style.background = bg(n.kind);
   f.style.left = (from.left - mrect.left + from.width * .1) + 'px'; f.style.top = (from.top - mrect.top + from.height * .12) + 'px';
   f.style.width = from.width * .8 + 'px'; f.style.height = from.height * .76 + 'px';
   $('machine').append(f);
@@ -166,14 +185,19 @@ async function pay() {
   await anim(f, [{transform: 'translate(0,0) rotate(0)'}, {transform: 'translate(0,' + (dy * .15) + 'px) rotate(8deg)', offset: .2}, {transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(-200deg) scale(.6)'}], 950, 'cubic-bezier(.5,0,.85,.55)');
   f.remove();
   prize = n; sel = null;
-  $('peek').style.background = 'var(' + CSSVAR[n.color] + ')';
+  $('peek').style.background = bg(n.kind);
   setMode('ready', 'Your note is in the tray. Take it.', 'Take your note');
 }
 function openPrize() { if (!prize) return; showNote(prize); prize = null; setMode('idle'); }
 function showNote(n) {
-  const box = $('prizeNote'); box.className = 'bignote ' + n.color; box.textContent = '';
-  box.append(el('b', '', n.name || 'Someone'), document.createTextNode('is down for: ' + n.activity), el('span', 'c', n.contact));
-  $('opener').textContent = 'Hey ' + (n.name || 'there') + ', I got your note from the vending machine. Still down for "' + n.activity + '"?';
+  const box = $('prizeNote'), fun = n.kind === 'fun'; box.className = 'bignote ' + n.color; box.textContent = '';
+  if (!fun) box.append(el('b', '', n.name || 'Someone'));
+  if (n.drawing) { const im = el('img'); im.alt = 'Handwritten note'; im.src = n.drawing; box.append(im); }
+  else box.append(document.createTextNode((fun ? '' : 'is down for: ') + n.activity));
+  if (!fun) box.append(el('span', 'c', n.contact));
+  $('hPrize').textContent = fun ? 'A note for you' : 'You got a note';
+  $('openerWrap').hidden = $('bCopy').hidden = fun;
+  $('opener').textContent = 'Hey ' + (n.name || 'there') + ', I got your note from the vending machine.' + (n.activity ? ' Still down for "' + n.activity + '"?' : ' Still down?');
   $('bCopy').textContent = 'Copy message';
   $('dPrize').showModal();
 }
@@ -184,21 +208,62 @@ function fail(e) {
   if (/not_approved/.test(m)) return 'Your membership is not approved yet.';
   if (/limit/.test(m)) return 'You already have ' + MAX_MINE + ' notes in the machine. Take one back first.';
   if (/slot_taken/.test(m)) return 'That box was just filled. Try again.';
+  if (/missing_details/.test(m)) return 'Add your name and a way to reach you.';
+  if (/bad_note|bad_kind/.test(m)) return 'That note could not be saved. Try a shorter message or a simpler drawing.';
   return 'The machine could not be reached. Try again in a moment.';
 }
+/* note type picker, type-or-draw toggle, drawing pad */
+const cv = $('cv'), ctx = cv.getContext('2d');
+const curKind = () => (document.querySelector('input[name=kind]:checked') || {}).value || 'hang_any';
+Object.keys(KINDS).forEach((k, i) => {
+  const lab = el('label'), inp = el('input'), sw = el('i'), txt = el('span');
+  inp.type = 'radio'; inp.name = 'kind'; inp.value = k; inp.id = 'k_' + k; inp.checked = k === 'hang_any'; lab.htmlFor = inp.id;
+  sw.style.setProperty('--c', bg(k)); txt.append(el('b', '', KINDS[k].group), document.createTextNode(KINDS[k].label));
+  lab.append(inp, sw, txt); $('kinds').append(lab);
+  inp.addEventListener('change', syncLeave);
+  const chip = el('button', 'chip'), dot = el('i'); chip.type = 'button'; chip.dataset.kind = k; chip.setAttribute('aria-pressed', 'false');
+  dot.style.setProperty('--c', bg(k)); chip.append(dot, document.createTextNode(k === 'fun' ? 'Fun note' : KINDS[k].group + ': ' + KINDS[k].label));
+  chip.addEventListener('click', () => { filter = filter === k ? '' : k; document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.kind === filter)); render(); });
+  $('legend').append(chip);
+});
+function syncLeave() {
+  const k = curKind(), fun = k === 'fun', draw = leaveMode === 'draw';
+  $('whoWrap').hidden = fun; $('actWrap').hidden = draw; $('drawWrap').hidden = !draw;
+  $('mType').setAttribute('aria-pressed', !draw); $('mDraw').setAttribute('aria-pressed', draw);
+  $('actLabel').textContent = fun ? 'Your message' : k.startsWith('rom') ? 'A date you would be down for' : 'One thing you would be down to do';
+  $('iAct').placeholder = fun ? 'Today is a good day to text first' : k.startsWith('rom') ? 'Coffee at Rebel' : 'Pickleball on Saturday';
+  $('pad').style.background = bg(k);
+}
+function clearPad() { ctx.clearRect(0, 0, cv.width, cv.height); inked = false; }
+$('mType').addEventListener('click', () => { leaveMode = 'type'; syncLeave(); });
+$('mDraw').addEventListener('click', () => { leaveMode = 'draw'; syncLeave(); });
+$('bClear').addEventListener('click', clearPad);
+(() => {
+  let last = null;
+  const at = e => { const r = cv.getBoundingClientRect(); return {x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height}; };
+  ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = ctx.fillStyle = '#1d2a44';
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} last = at(e); ctx.beginPath(); ctx.arc(last.x, last.y, 3, 0, 7); ctx.fill(); inked = true; });
+  cv.addEventListener('pointermove', e => { if (!last) return; e.preventDefault(); const p = at(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cv.addEventListener(t, () => { last = null; }));
+})();
+
 function openLeave() {
   if (needMember() || mode === 'busy') return;
-  $('leaveErr').textContent = '';
-  $('dLeave').showModal(); ($('iName').value ? $('iAct') : $('iName')).focus();
+  $('leaveErr').textContent = ''; syncLeave();
+  $('dLeave').showModal();
 }
 $('fLeave').addEventListener('submit', async ev => {
   ev.preventDefault();
-  const name = $('iName').value.trim(), activity = $('iAct').value.trim(), contact = $('iContact').value.trim();
-  const color = (document.querySelector('input[name=color]:checked') || {}).value || 'yellow';
+  const kind = curKind(), fun = kind === 'fun', draw = leaveMode === 'draw';
+  const name = fun ? '' : $('iName').value.trim(), contact = fun ? '' : $('iContact').value.trim();
+  const activity = draw ? '' : $('iAct').value.trim();
+  const drawing = draw ? cv.toDataURL('image/png') : '';
   const err = $('leaveErr');
-  if (!name) { err.textContent = 'Add your first name.'; return $('iName').focus(); }
-  if (activity.length < 3) { err.textContent = 'Add one thing you would do, like "Coffee at Rebel".'; return $('iAct').focus(); }
-  if (contact.length < 3) { err.textContent = 'Add a phone number or handle so they can reach you.'; return $('iContact').focus(); }
+  if (draw && !inked) { err.textContent = 'Draw or write something on the pad first.'; return; }
+  if (draw && drawing.length > 120000) { err.textContent = 'That drawing is too detailed to fit. Clear it and try a simpler one.'; return; }
+  if (!draw && activity.length < 3) { err.textContent = fun ? 'Write a short message.' : 'Add one thing you would do, like "Coffee at Rebel".'; return $('iAct').focus(); }
+  if (!fun && !name) { err.textContent = 'Add your first name.'; return $('iName').focus(); }
+  if (!fun && contact.length < 3) { err.textContent = 'Add a phone number or handle so they can reach you.'; return $('iContact').focus(); }
   const m = inMachine();
   if (Object.values(m).filter(n => n.by === me).length >= MAX_MINE) { err.textContent = 'You already have ' + MAX_MINE + ' notes in the machine. Take one back first.'; return; }
   const free = SLOTS.filter(s => !m[s.id]).map(s => s.id).sort(() => Math.random() - .5);
@@ -206,18 +271,18 @@ $('fLeave').addEventListener('submit', async ev => {
   $('dLeave').close();
   const was = mode; if (was === 'idle') mode = 'busy';
   say('Feeding your note into the slot.', 'Reading note');
-  const feed = $('feed'); feed.style.background = 'var(' + CSSVAR[color] + ')';
+  const feed = $('feed'); feed.style.background = bg(kind);
   await anim(feed, [{opacity: 0, transform: 'translateY(-26cqw) rotate(-6deg)'}, {opacity: 1, transform: 'translateY(-11cqw) rotate(-2deg)', offset: .45}, {opacity: 1, transform: 'translateY(0) scaleY(.5)', offset: .8}, {opacity: 0, transform: 'translateY(0) scaleY(.05)'}], 1100, 'ease-in');
   $('slot').classList.remove('flash'); void $('slot').offsetWidth; $('slot').classList.add('flash');
   let slot = null, lastErr = null;
   for (const tryId of free.slice(0, 3)) {               // another member may fill a box first: try up to three
-    const {error} = await sb.rpc('leave_note', {p_slot: tryId, p_activity: activity, p_color: color, p_name: name, p_contact: contact});
+    const {error} = await sb.rpc('leave_note', {p_slot: tryId, p_kind: kind, p_activity: activity, p_drawing: drawing, p_name: name, p_contact: contact});
     if (!error) { slot = tryId; break; }
     lastErr = error; if (!/slot_taken/.test(error.message || '')) break;
   }
   if (was === 'idle') mode = 'idle';
   if (!slot) return was === 'idle' ? setMode('idle', fail(lastErr)) : say(fail(lastErr));
-  await load(); $('iAct').value = '';
+  await load(); $('iAct').value = ''; clearPad();
   if (was === 'idle') setMode('idle', 'Your note is in box ' + slot + '. Someone can pull it now.'); else say('Your note is in box ' + slot + '.');
 });
 
@@ -228,16 +293,16 @@ function renderMine() {
   const L = $('lLeft'), G = $('lGot'); L.textContent = ''; G.textContent = '';
   if (!left.length) L.append(el('li', 'empty', 'Nothing yet. Leave a note to get started.'));
   left.forEach(n => {
-    const li = el('li'); li.style.setProperty('--c', 'var(' + CSSVAR[n.color] + ')');
-    const t = el('span', 't', n.activity); t.append(el('small', '', n.pulledBy ? 'Someone has it. Expect a message.' : 'Waiting in box ' + n.slot));
+    const li = el('li'); li.style.setProperty('--c', bg(n.kind));
+    const t = el('span', 't', describe(n)); t.append(el('small', '', kindName(n.kind) + '. ' + (n.pulledBy ? (n.kind === 'fun' ? 'Someone has it.' : 'Someone has it. Expect a message.') : 'Waiting in box ' + n.slot)));
     const b = el('button', 'btn', n.pulledBy ? 'Clear' : 'Take back'); b.type = 'button';
     b.addEventListener('click', async () => { b.disabled = true; const {error} = await sb.from('notes').delete().eq('id', n.id); if (error) { b.disabled = false; say(fail(error)); } else load(); });
     li.append(t, el('span', 'pill' + (n.pulledBy ? ' out' : ''), n.pulledBy ? 'Pulled' : 'In machine'), b); L.append(li);
   });
   if (!got.length) G.append(el('li', 'empty', 'You have not pulled a note yet.'));
   got.forEach(n => {
-    const li = el('li'); li.style.setProperty('--c', 'var(' + CSSVAR[n.color] + ')');
-    const t = el('span', 't', (n.name || 'Someone') + ': ' + n.activity); t.append(el('small', '', n.contact));
+    const li = el('li'); li.style.setProperty('--c', bg(n.kind));
+    const t = el('span', 't', (n.kind === 'fun' ? 'Fun note' : (n.name || 'Someone')) + ': ' + describe(n)); t.append(el('small', '', n.kind === 'fun' ? 'Anonymous' : n.contact));
     const b = el('button', 'btn', 'Open'); b.type = 'button'; b.addEventListener('click', () => { $('dMine').close(); showNote(n); });
     li.append(t, b); G.append(li);
   });

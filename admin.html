@@ -96,7 +96,7 @@ input{font:inherit;padding:10px 12px;border:2px solid #c3ccd4;border-radius:8px}
       <div class="filters" role="group" aria-label="Filter notes">
         <button data-f="all" aria-pressed="true">All</button><button data-f="in" aria-pressed="false">In machine</button><button data-f="out" aria-pressed="false">Pulled</button>
       </div>
-      <div class="scroll"><table><thead><tr><th>Box</th><th>Activity</th><th>Left by</th><th>Contact on note</th><th>Left</th><th>Status</th><th>Pulled by</th><th></th></tr></thead><tbody id="tNotes"></tbody></table></div>
+      <div class="scroll"><table><thead><tr><th>Box</th><th>Type</th><th>Note</th><th>Left by</th><th>Name and contact on note</th><th>Left</th><th>Status</th><th>Pulled by</th><th></th></tr></thead><tbody id="tNotes"></tbody></table></div>
     </section>
   </div>
 </main>
@@ -112,6 +112,13 @@ if (!cfg.url || /YOUR-/.test(cfg.url + cfg.anonKey) || !window.supabase) { $('wh
 const sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 const when = t => t ? new Date(t).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) : '';
 let me = null, members = [], notes = [], filter = 'all';
+const KIND = {rom_mw: ['Romantic: man and woman', '#f6b7cf'], rom_mm: ['Romantic: man for a man', '#a9d3f2'], rom_ww: ['Romantic: woman for a woman', '#d6c2ee'], rom_open: ['Romantic: non-binary or open', '#f7b29a'],
+  hang_guy: ['Hangout: with a guy', '#bfe6b0'], hang_girl: ['Hangout: with a girl', '#a5e0d6'], hang_any: ['Hangout: with anyone', '#f4e79a'], fun: ['Fun note', '#fbfaf4']};
+function kindCell(n) { const k = KIND[n.kind] || KIND.hang_any, s = el('span', 'pill', k[0]); s.style.background = k[1]; s.style.color = '#12161a'; return s; }
+function noteCell(n) {
+  if (typeof n.drawing === 'string' && n.drawing.startsWith('data:image/png;base64,')) { const im = el('img'); im.src = n.drawing; im.alt = 'Handwritten note'; im.style.cssText = 'width:72px;height:72px;border-radius:3px;display:block;background:' + (KIND[n.kind] || KIND.hang_any)[1]; return im; }
+  return document.createTextNode(n.activity || '');
+}
 
 function btn(label, cls, fn) { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', async () => { b.disabled = true; await fn(); b.disabled = false; }); return b; }
 async function setStatus(id, status) {
@@ -145,8 +152,8 @@ function render() {
 
   const N = $('tNotes'); N.textContent = '';
   const shown = filter === 'in' ? inM : filter === 'out' ? out : notes;
-  if (!shown.length) N.append(row([{text: 'No notes here.', cls: 'empty'}, '', '', '', '', '', '', '']));
-  shown.forEach(n => N.append(row([{text: n.slot, cls: 'n'}, n.activity, label(n.author), (n.secret ? n.secret.name + ' · ' + n.secret.contact : ''), {text: when(n.created_at), cls: 'n'},
+  if (!shown.length) N.append(row([{text: 'No notes here.', cls: 'empty'}, '', '', '', '', '', '', '', '']));
+  shown.forEach(n => N.append(row([{text: n.slot, cls: 'n'}, {node: kindCell(n)}, {node: noteCell(n)}, label(n.author), (n.secret && (n.secret.name || n.secret.contact) ? n.secret.name + ' · ' + n.secret.contact : n.kind === 'fun' ? 'Anonymous' : ''), {text: when(n.created_at), cls: 'n'},
     {node: el('span', 'pill ' + (n.pulled_at ? 'out' : 'in'), n.pulled_at ? 'Pulled' : 'In machine')}, n.pulled_at ? (label(n.pulled_by) || 'Removed member') + ', ' + when(n.pulled_at) : '',
     {cls: 'act', node: btn('Remove', 'bad', async () => { const {error} = await sb.from('notes').delete().eq('id', n.id); if (error) $('who').textContent = 'Could not remove: ' + error.message; else await load(); })}])));
 }
@@ -154,7 +161,7 @@ function render() {
 async function load() {
   const [m, n, s] = await Promise.all([
     sb.from('profiles').select('id,email,display_name,status,is_admin,created_at').order('created_at', {ascending: false}),
-    sb.from('notes').select('id,slot,activity,color,author,pulled_by,pulled_at,created_at').order('created_at', {ascending: false}),
+    sb.from('notes').select('id,slot,activity,kind,drawing,author,pulled_by,pulled_at,created_at').order('created_at', {ascending: false}),
     sb.from('note_secrets').select('note_id,name,contact')]);
   if (m.error || n.error) { $('who').textContent = 'Could not load: ' + (m.error || n.error).message; return; }
   const secrets = new Map((s.data || []).map(x => [x.note_id, x]));
