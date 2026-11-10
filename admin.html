@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Insert Note Admin Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Back office for the note machine: steel-grey working surface, blue for actions. Single light theme.
+     Layout: header, four count tiles, then stacked tables (applications first). */
+  color-scheme:light;
+  --bg:#e9edf0; --card:#fff; --ink:#12161a; --muted:#56616b; --line:#d3dae0; --go:#2f7fe6;
+  --ok:#1f7a45; --warn:#9a5b00; --bad:#a3261b;
+  --f-label:"Saira Condensed","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);line-height:1.4}
+main{max-width:1060px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+h1{font-family:var(--f-label);font-size:2rem;letter-spacing:.05em;text-transform:uppercase;margin:0;line-height:1}
+h2{font-family:var(--f-label);font-size:1.25rem;letter-spacing:.06em;text-transform:uppercase;margin:0 0 10px}
+a{color:var(--go)}
+.muted{color:var(--muted);font-size:.9rem}
+.card{background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--line)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile b{display:block;font:700 2rem/1 var(--f-label);font-variant-numeric:tabular-nums}
+.tile span{font-size:.85rem;color:var(--muted)}
+.tile.alert{border-color:var(--warn);box-shadow:inset 4px 0 0 var(--warn)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th{text-align:left;font:700 .78rem var(--f-label);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+td.act{white-space:nowrap;text-align:right}
+.pill{display:inline-block;font:700 .72rem var(--f-label);letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill.pending{background:#fdebc8;color:var(--warn)}.pill.approved{background:#d7f0df;color:var(--ok)}.pill.blocked{background:#f6d6d2;color:var(--bad)}
+.pill.in{background:#dbe7f8;color:#1c4f96}.pill.out{background:var(--ink);color:#fff}
+button{font:inherit;cursor:pointer;border:0;border-radius:7px;padding:7px 12px;font-weight:600;background:#dbe2e8;color:var(--ink)}
+button:hover{background:#cdd6dd}
+button.go{background:var(--go);color:#fff}button.go:hover{background:#4a92ef}
+button.bad{background:#f6d6d2;color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:3px solid var(--go);outline-offset:2px}
+form{display:flex;flex-direction:column;gap:12px;max-width:340px}
+label{display:flex;flex-direction:column;gap:5px;font-weight:600;font-size:.9rem}
+input{font:inherit;padding:10px 12px;border:2px solid #c3ccd4;border-radius:8px}
+.err{color:var(--bad);font-weight:600;font-size:.9rem;min-height:1.2em}
+.empty{color:var(--muted);padding:10px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.filters button[aria-pressed=true]{background:var(--ink);color:#fff}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Insert Note Admin</h1><div class="muted" id="who">Sign in with your admin account.</div></div>
+    <div><a href="index.html">Open the machine</a> <button id="bRefresh" hidden>Refresh</button> <button id="bOut" hidden>Sign out</button></div>
+  </header>
+
+  <section class="card" id="signin">
+    <h2>Admin sign in</h2>
+    <form id="fIn" novalidate>
+      <label for="email">Email<input id="email" type="email" autocomplete="email"></label>
+      <label for="pass">Password<input id="pass" type="password" autocomplete="current-password"></label>
+      <div class="err" id="err" role="alert"></div>
+      <button class="go" type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <div id="portal" hidden>
+    <div class="tiles" style="margin-bottom:20px">
+      <div class="tile" id="tilePending"><b id="cPending">0</b><span>Waiting for approval</span></div>
+      <div class="tile"><b id="cApproved">0</b><span>Approved members</span></div>
+      <div class="tile"><b id="cIn">0</b><span>Notes in the machine</span></div>
+      <div class="tile"><b id="cPulled">0</b><span>Notes pulled</span></div>
+    </div>
+
+    <section class="card" style="margin-bottom:20px">
+      <h2>Applications</h2>
+      <div class="scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Applied</th><th></th></tr></thead><tbody id="tPending"></tbody></table></div>
+    </section>
+
+    <section class="card" style="margin-bottom:20px">
+      <h2>Members</h2>
+      <div class="scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Joined</th><th>Notes left</th><th>Notes pulled</th><th></th></tr></thead><tbody id="tMembers"></tbody></table></div>
+    </section>
+
+    <section class="card">
+      <h2>Notes</h2>
+      <div class="filters" role="group" aria-label="Filter notes">
+        <button data-f="all" aria-pressed="true">All</button><button data-f="in" aria-pressed="false">In machine</button><button data-f="out" aria-pressed="false">Pulled</button>
+      </div>
+      <div class="scroll"><table><thead><tr><th>Box</th><th>Activity</th><th>Left by</th><th>Contact on note</th><th>Left</th><th>Status</th><th>Pulled by</th><th></th></tr></thead><tbody id="tNotes"></tbody></table></div>
+    </section>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const cfg = window.INSERT_NOTE_CONFIG || {};
+if (!cfg.url || /YOUR-/.test(cfg.url + cfg.anonKey) || !window.supabase) { $('who').textContent = 'Not connected yet: add your Supabase keys to config.js.'; $('signin').hidden = true; return; }
+const sb = window.supabase.createClient(cfg.url, cfg.anonKey);
+const when = t => t ? new Date(t).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) : '';
+let me = null, members = [], notes = [], filter = 'all';
+
+function btn(label, cls, fn) { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', async () => { b.disabled = true; await fn(); b.disabled = false; }); return b; }
+async function setStatus(id, status) {
+  const {error} = await sb.from('profiles').update({status}).eq('id', id);
+  if (error) $('who').textContent = 'That change did not save: ' + error.message; else await load();
+}
+function row(cells) { const tr = el('tr'); cells.forEach(c => { const td = el('td', c && c.cls || ''); if (c && c.node) td.append(...[].concat(c.node)); else td.textContent = c == null ? '' : (c.text != null ? c.text : c); tr.append(td); }); return tr; }
+
+function render() {
+  const byId = new Map(members.map(m => [m.id, m]));
+  const label = id => { const m = byId.get(id); return m ? (m.display_name || 'No name') + ' (' + m.email + ')' : ''; };
+  const pending = members.filter(m => m.status === 'pending');
+  const inM = notes.filter(n => !n.pulled_at), out = notes.filter(n => n.pulled_at);
+  $('cPending').textContent = pending.length; $('tilePending').classList.toggle('alert', pending.length > 0);
+  $('cApproved').textContent = members.filter(m => m.status === 'approved').length;
+  $('cIn').textContent = inM.length; $('cPulled').textContent = out.length;
+
+  const P = $('tPending'); P.textContent = '';
+  if (!pending.length) P.append(row([{text: 'No one is waiting.', cls: 'empty'}, '', '', '']));
+  pending.forEach(m => P.append(row([m.display_name || 'No name', m.email, {text: when(m.created_at), cls: 'n'},
+    {cls: 'act', node: [btn('Approve', 'go', () => setStatus(m.id, 'approved')), document.createTextNode(' '), btn('Decline', 'bad', () => setStatus(m.id, 'blocked'))]}])));
+
+  const M = $('tMembers'); M.textContent = '';
+  const rest = members.filter(m => m.status !== 'pending');
+  if (!rest.length) M.append(row([{text: 'No members yet.', cls: 'empty'}, '', '', '', '', '', '']));
+  rest.forEach(m => {
+    const act = m.id === me ? document.createTextNode('You') : m.status === 'approved' ? btn('Block', 'bad', () => setStatus(m.id, 'blocked')) : btn('Approve', 'go', () => setStatus(m.id, 'approved'));
+    M.append(row([(m.display_name || 'No name') + (m.is_admin ? ' (admin)' : ''), m.email, {node: el('span', 'pill ' + m.status, m.status)}, {text: when(m.created_at), cls: 'n'},
+      {text: notes.filter(n => n.author === m.id).length, cls: 'n'}, {text: notes.filter(n => n.pulled_by === m.id).length, cls: 'n'}, {cls: 'act', node: act}]));
+  });
+
+  const N = $('tNotes'); N.textContent = '';
+  const shown = filter === 'in' ? inM : filter === 'out' ? out : notes;
+  if (!shown.length) N.append(row([{text: 'No notes here.', cls: 'empty'}, '', '', '', '', '', '', '']));
+  shown.forEach(n => N.append(row([{text: n.slot, cls: 'n'}, n.activity, label(n.author), (n.secret ? n.secret.name + ' · ' + n.secret.contact : ''), {text: when(n.created_at), cls: 'n'},
+    {node: el('span', 'pill ' + (n.pulled_at ? 'out' : 'in'), n.pulled_at ? 'Pulled' : 'In machine')}, n.pulled_at ? (label(n.pulled_by) || 'Removed member') + ', ' + when(n.pulled_at) : '',
+    {cls: 'act', node: btn('Remove', 'bad', async () => { const {error} = await sb.from('notes').delete().eq('id', n.id); if (error) $('who').textContent = 'Could not remove: ' + error.message; else await load(); })}])));
+}
+
+async function load() {
+  const [m, n, s] = await Promise.all([
+    sb.from('profiles').select('id,email,display_name,status,is_admin,created_at').order('created_at', {ascending: false}),
+    sb.from('notes').select('id,slot,activity,color,author,pulled_by,pulled_at,created_at').order('created_at', {ascending: false}),
+    sb.from('note_secrets').select('note_id,name,contact')]);
+  if (m.error || n.error) { $('who').textContent = 'Could not load: ' + (m.error || n.error).message; return; }
+  const secrets = new Map((s.data || []).map(x => [x.note_id, x]));
+  members = m.data; notes = n.data.map(x => Object.assign({}, x, {secret: secrets.get(x.id)}));
+  render();
+}
+
+async function onSession(session) {
+  $('portal').hidden = true; $('bOut').hidden = !session; $('bRefresh').hidden = true; $('signin').hidden = !!session;
+  if (!session) { me = null; $('who').textContent = 'Sign in with your admin account.'; return; }
+  me = session.user.id;
+  const {data: p} = await sb.from('profiles').select('display_name,is_admin').eq('id', me).maybeSingle();
+  if (!p || !p.is_admin) { $('who').textContent = session.user.email + ' is not an admin account.'; return; }
+  $('who').textContent = 'Signed in as ' + (p.display_name || session.user.email);
+  $('portal').hidden = false; $('bRefresh').hidden = false;
+  await load();
+}
+
+$('fIn').addEventListener('submit', async ev => {
+  ev.preventDefault(); $('err').textContent = '';
+  const {error} = await sb.auth.signInWithPassword({email: $('email').value.trim(), password: $('pass').value});
+  if (error) $('err').textContent = error.message; else $('pass').value = '';
+});
+$('bOut').addEventListener('click', () => sb.auth.signOut());
+$('bRefresh').addEventListener('click', load);
+document.querySelectorAll('.filters button').forEach(b => b.addEventListener('click', () => { filter = b.dataset.f; document.querySelectorAll('.filters button').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); }));
+let lastUid;
+sb.auth.onAuthStateChange((event, session) => { const uid = session ? session.user.id : null; if (uid === lastUid && event !== 'SIGNED_OUT') return; lastUid = uid; setTimeout(() => onSession(session), 0); });
+setInterval(() => { if (!$('portal').hidden) load(); }, 60000);
+})();
+</script>
+</body>
+</html>
